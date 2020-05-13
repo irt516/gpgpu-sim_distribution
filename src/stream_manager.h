@@ -43,6 +43,45 @@
 //    unsigned m_pending_streams;
 //};
 
+struct CUevent_st {
+public:
+   CUevent_st( bool blocking )
+   {
+      m_uid = ++m_next_event_uid;
+      m_blocking = blocking;
+      m_updates = 0;
+      m_wallclock = 0;
+      m_gpu_tot_sim_cycle = 0;
+      m_issued = 0;
+      m_done = false;
+   }
+   void update( double cycle, time_t clk )
+   {
+      m_updates++;
+      m_wallclock=clk;
+      m_gpu_tot_sim_cycle=cycle;
+      m_done = true;
+   }
+   //void set_done() { assert(!m_done); m_done=true; }
+   int get_uid() const { return m_uid; }
+   unsigned num_updates() const { return m_updates; }
+   bool done() const { return m_updates==m_issued; }
+   time_t clock() const { return m_wallclock; }
+   void issue(){ m_issued++; }
+   unsigned int num_issued() const{ return m_issued; }
+private:
+   int m_uid;
+   bool m_blocking;
+   bool m_done;
+   int m_updates;
+   unsigned int m_issued;
+   time_t m_wallclock;
+   double m_gpu_tot_sim_cycle;
+
+   static int m_next_event_uid;
+};
+
+
 enum stream_operation_type {
     stream_no_op,
     stream_memcpy_host_to_device,
@@ -51,7 +90,8 @@ enum stream_operation_type {
     stream_memcpy_to_symbol,
     stream_memcpy_from_symbol,
     stream_kernel_launch,
-    stream_event
+    stream_event,
+    stream_wait_event
 };
 
 class stream_operation {
@@ -93,11 +133,20 @@ public:
         m_stream=stream;
         m_done=false;
     }
-    stream_operation( class CUevent_st *e, struct CUstream_st *stream )
+    stream_operation( struct CUevent_st *e, struct CUstream_st *stream )
     {
         m_kernel=NULL;
         m_type=stream_event;
         m_event=e;
+        m_stream=stream;
+        m_done=false;
+    }
+    stream_operation( struct CUstream_st *stream, class CUevent_st *e, unsigned int flags )
+    {
+        m_kernel=NULL;
+        m_type=stream_wait_event;
+        m_event=e;
+        m_cnt = m_event->num_issued();
         m_stream=stream;
         m_done=false;
     }
@@ -150,11 +199,10 @@ public:
     bool is_noop() const { return m_type == stream_no_op; }
     bool is_done() const { return m_done; }
     kernel_info_t *get_kernel() { return m_kernel; }
-    void do_operation( gpgpu_sim *gpu );
+    bool do_operation( gpgpu_sim *gpu );
     void print( FILE *fp ) const;
     struct CUstream_st *get_stream() { return m_stream; }
     void set_stream( CUstream_st *stream ) { m_stream = stream; }
-
 private:
     struct CUstream_st *m_stream;
 
@@ -172,43 +220,8 @@ private:
 
     bool m_sim_mode;
     kernel_info_t *m_kernel;
-    class CUevent_st *m_event;
+    struct CUevent_st *m_event;
 };
-
-class CUevent_st {
-public:
-   CUevent_st( bool blocking )
-   {
-      m_uid = ++m_next_event_uid;
-      m_blocking = blocking;
-      m_updates = 0;
-      m_wallclock = 0;
-      m_gpu_tot_sim_cycle = 0;
-      m_done = false;
-   }
-   void update( double cycle, time_t clk )
-   {
-      m_updates++;
-      m_wallclock=clk;
-      m_gpu_tot_sim_cycle=cycle;
-      m_done = true;
-   }
-   //void set_done() { assert(!m_done); m_done=true; }
-   int get_uid() const { return m_uid; }
-   unsigned num_updates() const { return m_updates; }
-   bool done() const { return m_done; }
-   time_t clock() const { return m_wallclock; }
-private:
-   int m_uid;
-   bool m_blocking;
-   bool m_done;
-   int m_updates;
-   time_t m_wallclock;
-   double m_gpu_tot_sim_cycle;
-
-   static int m_next_event_uid;
-};
-
 struct CUstream_st {
 public:
     CUstream_st(); 
@@ -218,6 +231,7 @@ public:
     void push( const stream_operation &op );
     void record_next_done();
     stream_operation next();
+    void cancel_front(); //front operation fails, cancle the pending status
     stream_operation &front() { return m_operations.front(); }
     void print( FILE *fp );
     unsigned get_uid() const { return m_uid; }
@@ -245,7 +259,9 @@ public:
     bool empty();
     void print( FILE *fp);
     void push( stream_operation op );
+    void pushCudaStreamWaitEventToAllStreams( CUevent_st *e, unsigned int flags );
     bool operation(bool * sim);
+    void stop_all_running_kernels();
 private:
     void print_impl( FILE *fp);
 
@@ -256,6 +272,7 @@ private:
     CUstream_st m_stream_zero;
     bool m_service_stream_zero;
     pthread_mutex_t m_lock;
+    std::list<struct CUstream_st*>::iterator m_last_stream;
 };
 
 #endif

@@ -35,6 +35,15 @@
 
 #include "../abstract_hardware_model.h"
 
+enum partition_index_function{
+	CONSECUTIVE = 0,
+	BITWISE_PERMUTATION,
+	IPOLY,
+	PAE,
+	RANDOM,
+    CUSTOM
+};
+
 struct addrdec_t {
    void print( FILE *fp ) const;
     
@@ -47,6 +56,7 @@ struct addrdec_t {
    unsigned sub_partition; 
 };
 
+
 class linear_to_raw_address_translation {
 public:
    linear_to_raw_address_translation();
@@ -54,7 +64,7 @@ public:
    void init(unsigned int n_channel, unsigned int n_sub_partition_in_channel); 
 
    // accessors
-   void addrdec_tlx(new_addr_type addr, addrdec_t *tlx) const; 
+   void addrdec_tlx(new_addr_type addr, addrdec_t *tlx) const;
    new_addr_type partition_address( new_addr_type addr ) const;
 
 private:
@@ -72,6 +82,7 @@ private:
 
    const char *addrdec_option;
    int gpgpu_mem_address_mask;
+   partition_index_function memory_partition_indexing;
    bool run_test; 
 
    int ADDR_CHIP_S;
@@ -83,6 +94,7 @@ private:
    unsigned int gap;
    int m_n_channel;
    int m_n_sub_partition_in_channel; 
+
 };
 
 #endif

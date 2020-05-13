@@ -47,6 +47,9 @@ public:
 
    void visualizer_print( gzFile visualizer_file );
 
+   // Reset local L2 stats that are aggregated each sampling window
+   void clear_L2_stats_pw();
+
    unsigned m_n_shader;
 
    const struct shader_core_config *m_shader_config;
@@ -56,6 +59,10 @@ public:
    unsigned max_dq_latency;
    unsigned max_mf_latency;
    unsigned max_icnt2mem_latency;
+   unsigned long long int tot_icnt2mem_latency;
+   unsigned long long int tot_icnt2sh_latency;
+   unsigned long long int tot_mrq_latency;
+   unsigned long long int tot_mrq_num;
    unsigned max_icnt2sh_latency;
    unsigned mrq_lat_table[32];
    unsigned dq_lat_table[32];
@@ -80,6 +87,11 @@ public:
    
    unsigned ***mem_access_type_stats; // dram access type classification
 
+   // AerialVision L2 stats
+   unsigned L2_read_miss;
+   unsigned L2_write_miss;
+   unsigned L2_read_hit;
+   unsigned L2_write_hit;
 
    // L2 cache stats
    unsigned int *L2_cbtoL2length;
